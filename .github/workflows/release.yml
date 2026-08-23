@@ -13,10 +13,6 @@ on:
 permissions:
   contents: read
   packages: write
-
-env:
-  IMAGE: ghcr.io/${{ github.repository }}
-
 jobs:
   # Runs before anything is built or pushed: a tag that disagrees with Cargo.toml would otherwise
   # publish an image whose --version output contradicts its own tag.
@@ -47,6 +43,11 @@ jobs:
             rust_target: aarch64-unknown-linux-musl
     steps:
       - uses: actions/checkout@v4
+
+      # github.repository keeps the owner's original casing, and an OCI reference must be
+      # lowercase - "ghcr.io/SvarogLab/..." is rejected outright.
+      - name: Resolve the image name
+        run: echo "IMAGE=ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -116,6 +117,11 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
+      # github.repository keeps the owner's original casing, and an OCI reference must be
+      # lowercase - "ghcr.io/SvarogLab/..." is rejected outright.
+      - name: Resolve the image name
+        run: echo "IMAGE=ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"
+
       - uses: actions/download-artifact@v4
         with:
           path: /tmp/digests
