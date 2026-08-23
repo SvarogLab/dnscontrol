@@ -3,7 +3,7 @@ use crate::diff;
 use crate::gcp::Dns;
 use crate::load::{self, ConfigFile};
 use crate::model::{Counts, Plan, ZoneChange};
-use crate::plan::plan;
+use crate::plan::{PlanOptions, plan};
 use crate::{gcp, watch};
 use anyhow::{Context, Result};
 
@@ -37,7 +37,14 @@ pub async fn run(cli: &Cli) -> Result<Counts> {
 pub async fn converge(cli: &Cli, dns: &Dns, files: &[ConfigFile]) -> Result<Counts> {
     let desired = load::build(files, cli.default_ttl)?;
     let observed = dns.observe().await?;
-    let plan = plan(&desired, &observed, cli.delete_undeclared_zones);
+    let plan = plan(
+        &desired,
+        &observed,
+        PlanOptions {
+            delete_undeclared_zones: cli.delete_undeclared_zones,
+            skip_soa_bump: cli.skip_soa_bump,
+        },
+    );
 
     if cli.diff {
         diff::print(&diff::render(&plan));

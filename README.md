@@ -41,6 +41,7 @@ milliseconds and needs no credentials at all.
 | `--debounce-ms` | `DNSCONTROL_DEBOUNCE_MS` | `500` |
 | `--default-ttl` | `DNSCONTROL_DEFAULT_TTL` | `900` |
 | `--delete-undeclared-zones` | `DNSCONTROL_DELETE_UNDECLARED_ZONES` | off |
+| `--skip-soa-bump` | `DNSCONTROL_SKIP_SOA_BUMP` | off |
 
 ## Configuration
 

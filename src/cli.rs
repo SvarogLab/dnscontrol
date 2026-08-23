@@ -65,6 +65,18 @@ pub struct Cli {
         action = clap::ArgAction::Set,
     )]
     pub delete_undeclared_zones: bool,
+
+    /// Leave the apex SOA serial alone on zones that change. Cloud DNS never bumps it itself, so
+    /// this means the serial stops reflecting the zone's contents.
+    #[arg(
+        long,
+        env = "DNSCONTROL_SKIP_SOA_BUMP",
+        num_args = 0..=1,
+        default_missing_value = "true",
+        default_value_t = false,
+        action = clap::ArgAction::Set,
+    )]
+    pub skip_soa_bump: bool,
 }
 
 #[cfg(test)]
@@ -84,6 +96,7 @@ mod tests {
         assert!(!cli.check);
         assert!(!cli.diff);
         assert!(!cli.delete_undeclared_zones);
+        assert!(!cli.skip_soa_bump);
         assert_eq!(cli.debounce_ms, 500);
         assert_eq!(cli.default_ttl, 900);
         assert_eq!(cli.project, None);
@@ -115,6 +128,16 @@ mod tests {
     #[test]
     fn the_old_keep_undeclared_zones_flag_is_gone() {
         assert!(Cli::try_parse_from(["dnscontrol", "--keep-undeclared-zones"]).is_err());
+    }
+
+    #[test]
+    fn skip_soa_bump_without_a_value_is_true() {
+        assert!(parse(&["--skip-soa-bump"]).skip_soa_bump);
+    }
+
+    #[test]
+    fn skip_soa_bump_equals_false_is_false() {
+        assert!(!parse(&["--skip-soa-bump=false"]).skip_soa_bump);
     }
 
     #[test]

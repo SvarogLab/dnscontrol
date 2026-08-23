@@ -2,11 +2,21 @@ use crate::model::{
     Desired, Observed, ObservedZone, Plan, RrKey, Rrset, ZoneChange, is_apex_owned, label_of,
 };
 
+/// What a plan may contain, as opposed to how it is computed.
+///
+/// Both defaults are the conservative ones: an undeclared zone is left alone, and a zone that
+/// changes gets its serial bumped.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct PlanOptions {
+    pub delete_undeclared_zones: bool,
+    pub skip_soa_bump: bool,
+}
+
 /// Diffs desired against observed state.
 ///
 /// Infallible by construction: every way a configuration can be wrong was already rejected during
 /// normalization. Deterministic because every collection it walks is ordered.
-pub fn plan(desired: &Desired, observed: &Observed, delete_undeclared_zones: bool) -> Plan {
+pub fn plan(desired: &Desired, observed: &Observed, opts: PlanOptions) -> Plan {
     let mut out = Plan::default();
 
     for (dns_name, zone) in &desired.zones {
@@ -15,7 +25,7 @@ pub fn plan(desired: &Desired, observed: &Observed, delete_undeclared_zones: boo
         }
     }
 
-    if delete_undeclared_zones {
+    if opts.delete_undeclared_zones {
         for (dns_name, zone) in &observed.zones {
             if !desired.zones.contains_key(dns_name) {
                 out.zones_to_delete.push(zone.clone());
@@ -66,12 +76,17 @@ pub fn plan(desired: &Desired, observed: &Observed, delete_undeclared_zones: boo
             // Cloud DNS does not touch the serial on changes.create - verified against the live
             // service by adding a record and re-reading the SOA - so the bump is ours to make. It
             // rides in the same atomic change as the records it describes.
-            match have.rrsets.get(&(have.dns_name.clone(), "SOA".to_string())) {
-                Some(soa) => match bump_soa(soa) {
-                    Some(bumped) => change.soa = Some((soa.clone(), bumped)),
+            //
+            // Asking for no bump is not the same as failing to bump: soa_bump_skipped stays false
+            // so it does not raise the warning that flags an SOA we could not parse.
+            if !opts.skip_soa_bump {
+                match have.rrsets.get(&(have.dns_name.clone(), "SOA".to_string())) {
+                    Some(soa) => match bump_soa(soa) {
+                        Some(bumped) => change.soa = Some((soa.clone(), bumped)),
+                        None => change.soa_bump_skipped = true,
+                    },
                     None => change.soa_bump_skipped = true,
-                },
-                None => change.soa_bump_skipped = true,
+                }
             }
             out.zone_changes.push(change);
         }
@@ -184,6 +199,11 @@ mod tests {
         Observed { zones }
     }
 
+    const DELETING: PlanOptions = PlanOptions {
+        delete_undeclared_zones: true,
+        skip_soa_bump: false,
+    };
+
     fn only_change(plan: &Plan) -> &ZoneChange {
         assert_eq!(
             plan.zone_changes.len(),
@@ -197,7 +217,11 @@ mod tests {
 
     #[test]
     fn empty_desired_and_observed_is_an_empty_plan() {
-        let p = plan(&Desired::default(), &Observed::default(), false);
+        let p = plan(
+            &Desired::default(),
+            &Observed::default(),
+            PlanOptions::default(),
+        );
         assert!(p.is_empty());
         assert_eq!(p.counts(), Default::default());
     }
@@ -207,7 +231,7 @@ mod tests {
         let p = plan(
             &want(&[rr("www.", "A", 300, &["192.0.2.10"])]),
             &Observed::default(),
-            false,
+            PlanOptions::default(),
         );
         assert_eq!(p.zones_to_create.len(), 1);
         assert_eq!(p.zones_to_create[0].resource_name, "example-com");
@@ -222,14 +246,14 @@ mod tests {
 
     #[test]
     fn undeclared_zone_is_kept_by_default() {
-        let p = plan(&Desired::default(), &have(&[]), false);
+        let p = plan(&Desired::default(), &have(&[]), PlanOptions::default());
         assert!(p.zones_to_delete.is_empty());
         assert!(p.is_empty());
     }
 
     #[test]
     fn undeclared_zone_is_deleted_only_when_asked() {
-        let p = plan(&Desired::default(), &have(&[]), true);
+        let p = plan(&Desired::default(), &have(&[]), DELETING);
         assert_eq!(p.zones_to_delete.len(), 1);
         assert_eq!(p.counts().zones_deleted, 1);
     }
@@ -239,7 +263,7 @@ mod tests {
         let p = plan(
             &want(&[rr("www.", "A", 300, &["192.0.2.10"])]),
             &have_named("renamed-by-hand", &[], vec![]),
-            false,
+            PlanOptions::default(),
         );
         assert!(p.zones_to_create.is_empty(), "must not recreate the zone");
         assert_eq!(only_change(&p).resource_name, "renamed-by-hand");
@@ -250,7 +274,7 @@ mod tests {
     #[test]
     fn identical_zone_produces_no_change() {
         let rrsets = [rr("www.", "A", 300, &["192.0.2.10"])];
-        assert!(plan(&want(&rrsets), &have(&rrsets), false).is_empty());
+        assert!(plan(&want(&rrsets), &have(&rrsets), PlanOptions::default()).is_empty());
     }
 
     #[test]
@@ -258,7 +282,7 @@ mod tests {
         let p = plan(
             &want(&[rr("www.", "A", 300, &["192.0.2.10"])]),
             &have(&[]),
-            false,
+            PlanOptions::default(),
         );
         let c = only_change(&p);
         assert_eq!(c.additions.len(), 1);
@@ -268,7 +292,11 @@ mod tests {
 
     #[test]
     fn undeclared_rrset_is_a_deletion() {
-        let p = plan(&want(&[]), &have(&[rr("old.", "TXT", 300, &["x"])]), false);
+        let p = plan(
+            &want(&[]),
+            &have(&[rr("old.", "TXT", 300, &["x"])]),
+            PlanOptions::default(),
+        );
         let c = only_change(&p);
         assert_eq!(c.deletions.len(), 1);
         assert!(c.additions.is_empty());
@@ -282,7 +310,7 @@ mod tests {
         let p = plan(
             &want(std::slice::from_ref(&new)),
             &have(std::slice::from_ref(&old)),
-            false,
+            PlanOptions::default(),
         );
         let c = only_change(&p);
         assert_eq!(c.additions, vec![new]);
@@ -301,7 +329,7 @@ mod tests {
         let p = plan(
             &want(&[rr("www.", "A", 300, &["192.0.2.11"])]),
             &have(&[rr("www.", "A", 300, &["192.0.2.10"])]),
-            false,
+            PlanOptions::default(),
         );
         assert_eq!(only_change(&p).updates.len(), 1);
     }
@@ -311,7 +339,7 @@ mod tests {
         let p = plan(
             &want(&[rr("", "TXT", 300, &["a", "b"])]),
             &have(&[rr("", "TXT", 300, &["b", "a"])]),
-            false,
+            PlanOptions::default(),
         );
         assert!(
             p.is_empty(),
@@ -324,7 +352,7 @@ mod tests {
         let p = plan(
             &want(&[rr("foo.", "A", 300, &["192.0.2.10"])]),
             &have(&[rr("foo.", "TXT", 300, &["x"])]),
-            false,
+            PlanOptions::default(),
         );
         let c = only_change(&p);
         assert_eq!(c.additions.len(), 1);
@@ -344,13 +372,13 @@ mod tests {
                 "ns1.example.net. hostmaster.example.net. 3 21600 3600 259200 300".into(),
             ],
         };
-        assert!(plan(&want(&[]), &have(&[soa]), false).is_empty());
+        assert!(plan(&want(&[]), &have(&[soa]), PlanOptions::default()).is_empty());
     }
 
     #[test]
     fn apex_ns_is_never_deleted() {
         let ns = rr("", "NS", 21600, &["ns1.example.net."]);
-        assert!(plan(&want(&[]), &have(&[ns]), false).is_empty());
+        assert!(plan(&want(&[]), &have(&[ns]), PlanOptions::default()).is_empty());
     }
 
     /// The reservation is apex-scoped: a delegation NS below the apex is ours, and goes if
@@ -360,7 +388,7 @@ mod tests {
         let p = plan(
             &want(&[]),
             &have(&[rr("sub.", "NS", 300, &["ns1.example.net."])]),
-            false,
+            PlanOptions::default(),
         );
         assert_eq!(only_change(&p).deletions.len(), 1);
     }
@@ -373,7 +401,7 @@ mod tests {
                 rr("_acme-challenge.", "TXT", 60, &["token"]),
                 rr("_acme-challenge.foo.", "TXT", 60, &["token"]),
             ]),
-            false,
+            PlanOptions::default(),
         );
         assert!(
             p.is_empty(),
@@ -387,7 +415,7 @@ mod tests {
         let p = plan(
             &want(&[]),
             &have(&[rr("_acme-challenge.", "A", 60, &["192.0.2.10"])]),
-            false,
+            PlanOptions::default(),
         );
         assert_eq!(only_change(&p).deletions.len(), 1);
     }
@@ -401,7 +429,7 @@ mod tests {
         let p = plan(
             &want_with_ignore(&[], vec![rule]),
             &have(&[rr("legacy.", "A", 300, &["192.0.2.10"])]),
-            false,
+            PlanOptions::default(),
         );
         assert!(p.is_empty());
     }
@@ -412,7 +440,7 @@ mod tests {
         let p = plan(
             &want(&[]),
             &have_named("example-com", std::slice::from_ref(&geo), vec![geo.key()]),
-            false,
+            PlanOptions::default(),
         );
         assert!(
             p.is_empty(),
@@ -429,7 +457,7 @@ mod tests {
         let p = plan(
             &want(std::slice::from_ref(&geo)),
             &have_named("example-com", &[], vec![geo.key()]),
-            false,
+            PlanOptions::default(),
         );
         assert_eq!(p.conflicts, vec![("example.com.".to_string(), geo.key())]);
         assert!(p.zone_changes.is_empty(), "nothing may be planned for it");
@@ -449,9 +477,9 @@ mod tests {
             rr("b.", "A", 900, &["192.0.2.11"]),
             rr("z.", "TXT", 300, &["y"]),
         ]);
-        let first = plan(&d, &o, false);
+        let first = plan(&d, &o, PlanOptions::default());
         for _ in 0..5 {
-            assert_eq!(plan(&d, &o, false), first);
+            assert_eq!(plan(&d, &o, PlanOptions::default()), first);
         }
     }
 
@@ -475,7 +503,7 @@ mod tests {
         let p = plan(
             &want(&[rr("www.", "A", 300, &["192.0.2.10"])]),
             &have(&[soa(&[SOA_RDATA])]),
-            false,
+            PlanOptions::default(),
         );
         let c = only_change(&p);
         let (old, new) = c.soa.as_ref().expect("a changed zone bumps its serial");
@@ -490,7 +518,7 @@ mod tests {
         let p = plan(
             &want(&[rr("www.", "A", 300, &["192.0.2.10"])]),
             &have(&[soa(&[SOA_RDATA])]),
-            false,
+            PlanOptions::default(),
         );
         let c = only_change(&p);
         assert_eq!(c.additions.len(), 1, "only the real record");
@@ -505,7 +533,7 @@ mod tests {
         let rrsets = [rr("www.", "A", 300, &["192.0.2.10"])];
         let mut observed = rrsets.to_vec();
         observed.push(soa(&[SOA_RDATA]));
-        assert!(plan(&want(&rrsets), &have(&observed), false).is_empty());
+        assert!(plan(&want(&rrsets), &have(&observed), PlanOptions::default()).is_empty());
     }
 
     #[test]
@@ -513,7 +541,7 @@ mod tests {
         let p = plan(
             &want(&[rr("www.", "A", 300, &["192.0.2.10"])]),
             &have(&[soa(&["not a soa"])]),
-            false,
+            PlanOptions::default(),
         );
         let c = only_change(&p);
         assert!(c.soa.is_none());
@@ -526,7 +554,7 @@ mod tests {
         let p = plan(
             &want(&[rr("www.", "A", 300, &["192.0.2.10"])]),
             &have(&[]),
-            false,
+            PlanOptions::default(),
         );
         assert!(only_change(&p).soa_bump_skipped);
     }
@@ -566,6 +594,43 @@ mod tests {
                 "ns1.example.net. hostmaster.example.net. x 21600 3600 259200 300"
             ]))
             .is_none()
+        );
+    }
+
+    #[test]
+    fn skip_soa_bump_emits_no_pair_and_raises_no_warning() {
+        let p = plan(
+            &want(&[rr("www.", "A", 300, &["192.0.2.10"])]),
+            &have(&[soa(&[SOA_RDATA])]),
+            PlanOptions {
+                skip_soa_bump: true,
+                ..PlanOptions::default()
+            },
+        );
+        let c = only_change(&p);
+        assert!(c.soa.is_none());
+        assert!(
+            !c.soa_bump_skipped,
+            "asked not to bump is not the same as failed to bump"
+        );
+        assert_eq!(c.additions.len(), 1, "the real change still goes through");
+    }
+
+    #[test]
+    fn skip_soa_bump_does_not_turn_a_no_op_into_a_change() {
+        let rrsets = [rr("www.", "A", 300, &["192.0.2.10"])];
+        let mut observed = rrsets.to_vec();
+        observed.push(soa(&[SOA_RDATA]));
+        assert!(
+            plan(
+                &want(&rrsets),
+                &have(&observed),
+                PlanOptions {
+                    skip_soa_bump: true,
+                    ..PlanOptions::default()
+                },
+            )
+            .is_empty()
         );
     }
 
