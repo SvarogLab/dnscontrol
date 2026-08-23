@@ -170,4 +170,4 @@ cargo test
 
 Everything committed here — examples, test fixtures, sample output — uses only RFC 2606
 (`example.com`) and RFC 5737 (`192.0.2.0/24`) reserved names. Real zone configuration and
-credentials go in `data/`, which is gitignored.
+credentials never enter this repository at all; they live wherever you deploy from.

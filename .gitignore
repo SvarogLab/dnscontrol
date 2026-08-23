@@ -1,6 +1,1 @@
 /target
-
-# Real zone configuration and GCP service account keys. This project ships only RFC 2606
-# (example.com) and RFC 5737 (192.0.2.0/24) fixtures; anything describing actual infrastructure
-# lives here and is never committed.
-/data
