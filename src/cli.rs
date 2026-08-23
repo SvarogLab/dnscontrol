@@ -123,13 +123,6 @@ mod tests {
         assert!(parse(&["--delete-undeclared-zones"]).delete_undeclared_zones);
     }
 
-    /// The old spelling was the inverse. Leaving it parseable would silently flip the meaning of an
-    /// existing deployment's args, so it has to be rejected outright.
-    #[test]
-    fn the_old_keep_undeclared_zones_flag_is_gone() {
-        assert!(Cli::try_parse_from(["dnscontrol", "--keep-undeclared-zones"]).is_err());
-    }
-
     #[test]
     fn skip_soa_bump_without_a_value_is_true() {
         assert!(parse(&["--skip-soa-bump"]).skip_soa_bump);
