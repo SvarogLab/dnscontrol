@@ -1,0 +1,34 @@
+# Reusable record groups, referenced by name from any zone in any file. The registry is global and
+# built before anything is resolved, so a snippet may be defined after the zone that uses it.
+kind: snippets
+snippets:
+  mail-mx:
+    - type: mx
+      ttl: 300
+      target:
+        - 10 mx1.mail.example.net.
+        - 20 mx2.mail.example.net.
+
+  spf-dmarc:
+    - type: txt
+      target:
+        - '"v=spf1 include:_spf.mail.example.net ~all"'
+    - name: _dmarc
+      type: txt
+      target:
+        - '"v=DMARC1; p=reject; sp=reject;"'
+    - name: "*"
+      type: txt
+      target:
+        - '"v=spf1 ~all"'
+
+  caa-letsencrypt:
+    - type: caa
+      ttl: 300
+      target:
+        - 128 issue "letsencrypt.org"
+
+  # Snippets may use snippets; cycles are detected and named.
+  mail-stack:
+    - use: mail-mx
+    - use: spf-dmarc

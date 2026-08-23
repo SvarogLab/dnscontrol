@@ -1,0 +1,11 @@
+target/
+**/target/
+# The Dockerfile packages a pre-built binary from target/<TARGETARCH>/release/ (staged there from
+# the cross-compiled rust-triple path - see .github/workflows/release.yml's "Stage binary at its
+# TARGETARCH path" step, or do the equivalent `cp` for a local build). Everything else under
+# target/ stays excluded; only this final release artifact is let back in.
+!target/amd64/release/dnscontrol
+!target/arm64/release/dnscontrol
+
+# Never reaches the image, and must never reach the build context either.
+data/

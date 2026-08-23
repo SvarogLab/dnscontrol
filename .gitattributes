@@ -1,0 +1,27 @@
+# ─────────────────────────────────────────────
+# 🦀 Rust source
+*.rs text eol=lf diff=rust
+
+# 📦 Cargo
+Cargo.lock linguist-generated
+Cargo.toml text eol=lf
+
+# 📝 Markdown documentation
+*.md diff=markdown
+README.md linguist-documentation
+
+# 🏗 Build artifacts
+/target/** linguist-generated
+
+# 📄 Common structured text files
+*.json diff=default
+*.toml diff=default
+*.yml  diff=default
+*.yaml diff=default
+
+# 💡 Ensure consistent line endings (LF only)
+*.sh  text eol=lf
+*.rs  text eol=lf
+*.toml text eol=lf
+
+*.lock diff=hidden

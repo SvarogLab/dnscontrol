@@ -1,0 +1,52 @@
+[package]
+name = "dnscontrol"
+version = "0.1.0"
+edition = "2024"
+authors = ["Evgeniy Slizevich <evgeniy@slizevich.net>"]
+license = "MIT OR Apache-2.0"
+description = "Converges Google Cloud DNS managed zones and record sets to a directory of declarative YAML, as a one-shot CLI or a Kubernetes controller watching a mounted ConfigMap"
+repository = "https://github.com/svaroglab/dnscontrol"
+
+[[bin]]
+name = "dnscontrol"
+path = "src/main.rs"
+
+[dependencies]
+google-cloud-dns-v1 = "1.7.0"
+google-cloud-auth = "1.15.0"
+
+# ItemPaginator must be `use`d for .next() to resolve; retry/backoff policies live here too.
+google-cloud-gax = "1.13.0"
+
+# Service account keys are JSON, and project_id is resolved out of one.
+serde_json = "1.0.151"
+
+serde = { version = "1.0.229", features = ["derive"] }
+
+# The Rust target type is the schema: `target: [192.0.2.10]` deserializes into Vec<String> instead
+# of erroring as "invalid type: integer", and `name: no` stays the string "no". serde_yaml has been
+# deprecated since 2024.
+serde-saphyr = "1.1.0"
+
+clap = { version = "4.6.6", features = ["derive", "env"] }
+anyhow = "1.0.104"
+tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros", "signal", "sync", "time"] }
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
+
+# inotify, watched non-recursively on the config directory - see src/watch.rs.
+notify = "8.2.0"
+
+# One ConfigMap update produces a burst of inotify events; debouncing collapses them into one
+# converge. 0.7 requires notify ^8.2, matching the pin above.
+notify-debouncer-full = "0.7.0"
+
+# Only for the GCE/GKE metadata server, which is plain HTTP on a link-local address - hence no TLS
+# features. google-cloud-auth already pulls reqwest in; this just makes the dependency explicit.
+reqwest = { version = "0.13.4", default-features = false }
+
+[dev-dependencies]
+# Only to hand-build a gax error in watch.rs's retry-classification tests; both are already in the
+# tree via google-cloud-gax.
+bytes = "1.11.0"
+http = "1.5.0"

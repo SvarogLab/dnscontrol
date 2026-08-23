@@ -1,0 +1,26 @@
+# A file may hold several documents, and may mix zones with snippet definitions.
+kind: zone
+zone: example.net
+
+# Record sets some other system owns. `_acme-challenge*`/TXT is always ignored and does not need
+# to be listed; anything else does. Declaring a record that matches an ignore rule is an error.
+ignore:
+  - name: "_dnsauth*"
+    type: txt
+
+records:
+  - use: caa-letsencrypt
+  - name: mx1.mail
+    type: a
+    target: [198.51.100.10]
+  - name: mx2.mail
+    type: a
+    target: [198.51.100.11]
+---
+kind: zone
+zone: example.org
+records:
+  - use: caa-letsencrypt
+  - type: txt
+    target:
+      - '"v=spf1 -all"'

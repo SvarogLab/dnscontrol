@@ -1,0 +1,22 @@
+kind: zone
+zone: example.com
+
+records:
+  - use: mail-stack
+  - use: caa-letsencrypt
+
+  # No "name" means the zone apex. Names are relative labels, never FQDNs.
+  - name: www
+    type: a
+    target: [192.0.2.10]
+
+  - name: app
+    type: a
+    ttl: 300
+    target:
+      - 192.0.2.11
+      - 192.0.2.12
+
+  - name: docs
+    type: cname
+    target: [www.example.com.]

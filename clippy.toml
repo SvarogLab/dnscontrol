@@ -1,0 +1,7 @@
+# Clippy linting configuration for dnscontrol
+# Only non-default options
+
+# converge() threads the whole run's configuration through one call - config dir, DNS client,
+# apply/diff flags, default TTL, zone-pruning - which sits right at the default threshold and
+# would cross it the moment another knob is added.
+too-many-arguments-threshold = 8
