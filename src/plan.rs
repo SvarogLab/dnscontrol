@@ -6,7 +6,7 @@ use crate::model::{
 ///
 /// Infallible by construction: every way a configuration can be wrong was already rejected during
 /// normalization. Deterministic because every collection it walks is ordered.
-pub fn plan(desired: &Desired, observed: &Observed, keep_undeclared_zones: bool) -> Plan {
+pub fn plan(desired: &Desired, observed: &Observed, delete_undeclared_zones: bool) -> Plan {
     let mut out = Plan::default();
 
     for (dns_name, zone) in &desired.zones {
@@ -15,7 +15,7 @@ pub fn plan(desired: &Desired, observed: &Observed, keep_undeclared_zones: bool)
         }
     }
 
-    if !keep_undeclared_zones {
+    if delete_undeclared_zones {
         for (dns_name, zone) in &observed.zones {
             if !desired.zones.contains_key(dns_name) {
                 out.zones_to_delete.push(zone.clone());
@@ -221,17 +221,17 @@ mod tests {
     }
 
     #[test]
-    fn undeclared_zone_is_deleted() {
+    fn undeclared_zone_is_kept_by_default() {
         let p = plan(&Desired::default(), &have(&[]), false);
-        assert_eq!(p.zones_to_delete.len(), 1);
-        assert_eq!(p.counts().zones_deleted, 1);
+        assert!(p.zones_to_delete.is_empty());
+        assert!(p.is_empty());
     }
 
     #[test]
-    fn undeclared_zone_is_kept_when_asked() {
+    fn undeclared_zone_is_deleted_only_when_asked() {
         let p = plan(&Desired::default(), &have(&[]), true);
-        assert!(p.zones_to_delete.is_empty());
-        assert!(p.is_empty());
+        assert_eq!(p.zones_to_delete.len(), 1);
+        assert_eq!(p.counts().zones_deleted, 1);
     }
 
     #[test]

@@ -37,7 +37,7 @@ pub async fn run(cli: &Cli) -> Result<Counts> {
 pub async fn converge(cli: &Cli, dns: &Dns, files: &[ConfigFile]) -> Result<Counts> {
     let desired = load::build(files, cli.default_ttl)?;
     let observed = dns.observe().await?;
-    let plan = plan(&desired, &observed, cli.keep_undeclared_zones);
+    let plan = plan(&desired, &observed, cli.delete_undeclared_zones);
 
     if cli.diff {
         diff::print(&diff::render(&plan));

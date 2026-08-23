@@ -53,17 +53,18 @@ pub struct Cli {
     #[arg(long, env = "DNS_DEFAULT_TTL", default_value_t = crate::normalize::DEFAULT_TTL)]
     pub default_ttl: u32,
 
-    /// Keep managed zones that exist in GCP but are not declared. Off by default: this tool is
-    /// authoritative over the whole project.
+    /// Delete managed zones that exist in GCP but are not declared here. Off by default: dropping a
+    /// zone is the one irreversible thing this tool can do, and a config that fails to load a file
+    /// looks exactly like a config that meant to retire every zone in it.
     #[arg(
         long,
-        env = "DNS_KEEP_UNDECLARED_ZONES",
+        env = "DNS_DELETE_UNDECLARED_ZONES",
         num_args = 0..=1,
         default_missing_value = "true",
         default_value_t = false,
         action = clap::ArgAction::Set,
     )]
-    pub keep_undeclared_zones: bool,
+    pub delete_undeclared_zones: bool,
 }
 
 #[cfg(test)]
@@ -82,7 +83,7 @@ mod tests {
         assert!(!cli.watch);
         assert!(!cli.check);
         assert!(!cli.diff);
-        assert!(!cli.keep_undeclared_zones);
+        assert!(!cli.delete_undeclared_zones);
         assert_eq!(cli.debounce_ms, 500);
         assert_eq!(cli.default_ttl, 900);
         assert_eq!(cli.project, None);
@@ -100,8 +101,20 @@ mod tests {
     }
 
     #[test]
-    fn keep_undeclared_zones_equals_false_is_false() {
-        assert!(!parse(&["--keep-undeclared-zones=false"]).keep_undeclared_zones);
+    fn delete_undeclared_zones_equals_false_is_false() {
+        assert!(!parse(&["--delete-undeclared-zones=false"]).delete_undeclared_zones);
+    }
+
+    #[test]
+    fn delete_undeclared_zones_without_a_value_is_true() {
+        assert!(parse(&["--delete-undeclared-zones"]).delete_undeclared_zones);
+    }
+
+    /// The old spelling was the inverse. Leaving it parseable would silently flip the meaning of an
+    /// existing deployment's args, so it has to be rejected outright.
+    #[test]
+    fn the_old_keep_undeclared_zones_flag_is_gone() {
+        assert!(Cli::try_parse_from(["dnscontrol", "--keep-undeclared-zones"]).is_err());
     }
 
     #[test]

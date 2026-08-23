@@ -4,10 +4,13 @@ Converges Google Cloud DNS to the zones declared in a directory of YAML document
 one-shot CLI with `--check`/`--diff`, or as a controller that watches a mounted ConfigMap and
 reconverges when it changes.
 
-> **This tool is authoritative over the whole GCP project.** By default any managed zone that
-> exists in the project but is not declared in the config is **deleted**, along with any record set
-> inside a declared zone that the config does not mention. Point it only at a project you own
-> exclusively, or pass `--keep-undeclared-zones`.
+> **Inside a declared zone this tool is authoritative:** any record set the config does not mention
+> is **deleted**, except what an `ignore` rule claims. Point it only at zones you own.
+>
+> Whole zones are a separate decision. A zone that exists in the project but is not declared here is
+> left alone by default, because a config that failed to load a file looks exactly like a config
+> that meant to retire every zone in it. `--delete-undeclared-zones` turns that into deletion — it
+> is meant for a deliberate, supervised run, not for a controller's steady state.
 
 ## Usage
 
@@ -37,7 +40,7 @@ milliseconds and needs no credentials at all.
 | `--watch` | `DNS_WATCH` | off |
 | `--debounce-ms` | `DNS_DEBOUNCE_MS` | `500` |
 | `--default-ttl` | `DNS_DEFAULT_TTL` | `900` |
-| `--keep-undeclared-zones` | `DNS_KEEP_UNDECLARED_ZONES` | off |
+| `--delete-undeclared-zones` | `DNS_DELETE_UNDECLARED_ZONES` | off |
 
 ## Configuration
 
