@@ -11,7 +11,7 @@ use std::path::PathBuf;
 pub struct Cli {
     /// Directory of `kind: zone` / `kind: snippets` YAML documents. In Kubernetes this is the
     /// ConfigMap mount point; dot-prefixed entries (`..data`, `..2026_…`) are ignored.
-    #[arg(long, env = "DNS_CONFIG_DIR", default_value = "/etc/dnscontrol")]
+    #[arg(long, env = "DNSCONTROL_CONFIG_DIR", default_value = "/etc/dnscontrol")]
     pub config_dir: PathBuf,
 
     /// Service account JSON key. Omit to use Application Default Credentials, which also covers
@@ -33,10 +33,10 @@ pub struct Cli {
 
     /// Stay running, watching --config-dir and reconverging on every real change.
     // num_args/default_missing_value rather than a bare SetTrue flag: clap runs the value parser
-    // over env values too, so DNS_WATCH=false would otherwise mean "true".
+    // over env values too, so DNSCONTROL_WATCH=false would otherwise mean "true".
     #[arg(
         long,
-        env = "DNS_WATCH",
+        env = "DNSCONTROL_WATCH",
         num_args = 0..=1,
         default_missing_value = "true",
         default_value_t = false,
@@ -46,11 +46,11 @@ pub struct Cli {
 
     /// Debounce window in milliseconds for filesystem events. One ConfigMap update produces a
     /// burst of them.
-    #[arg(long, env = "DNS_DEBOUNCE_MS", default_value_t = 500)]
+    #[arg(long, env = "DNSCONTROL_DEBOUNCE_MS", default_value_t = 500)]
     pub debounce_ms: u64,
 
     /// TTL applied to a record that declares none.
-    #[arg(long, env = "DNS_DEFAULT_TTL", default_value_t = crate::normalize::DEFAULT_TTL)]
+    #[arg(long, env = "DNSCONTROL_DEFAULT_TTL", default_value_t = crate::normalize::DEFAULT_TTL)]
     pub default_ttl: u32,
 
     /// Delete managed zones that exist in GCP but are not declared here. Off by default: dropping a
@@ -58,7 +58,7 @@ pub struct Cli {
     /// looks exactly like a config that meant to retire every zone in it.
     #[arg(
         long,
-        env = "DNS_DELETE_UNDECLARED_ZONES",
+        env = "DNSCONTROL_DELETE_UNDECLARED_ZONES",
         num_args = 0..=1,
         default_missing_value = "true",
         default_value_t = false,

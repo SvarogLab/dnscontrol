@@ -32,15 +32,15 @@ milliseconds and needs no credentials at all.
 
 | Flag | Environment | Default |
 | --- | --- | --- |
-| `--config-dir` | `DNS_CONFIG_DIR` | `/etc/dnscontrol` |
+| `--config-dir` | `DNSCONTROL_CONFIG_DIR` | `/etc/dnscontrol` |
 | `--credentials` | `GOOGLE_APPLICATION_CREDENTIALS` | Application Default Credentials |
 | `--project` | `GOOGLE_CLOUD_PROJECT` | from the key, then the metadata server |
 | `--check` | — | off |
 | `--diff` | — | off |
-| `--watch` | `DNS_WATCH` | off |
-| `--debounce-ms` | `DNS_DEBOUNCE_MS` | `500` |
-| `--default-ttl` | `DNS_DEFAULT_TTL` | `900` |
-| `--delete-undeclared-zones` | `DNS_DELETE_UNDECLARED_ZONES` | off |
+| `--watch` | `DNSCONTROL_WATCH` | off |
+| `--debounce-ms` | `DNSCONTROL_DEBOUNCE_MS` | `500` |
+| `--default-ttl` | `DNSCONTROL_DEFAULT_TTL` | `900` |
+| `--delete-undeclared-zones` | `DNSCONTROL_DELETE_UNDECLARED_ZONES` | off |
 
 ## Configuration
 
