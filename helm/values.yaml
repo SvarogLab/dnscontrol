@@ -41,12 +41,9 @@ serviceAccount:
   #   iam.gke.io/gcp-service-account: dnscontrol@<project>.iam.gserviceaccount.com
   annotations: {}
 
-resources:
-  requests:
-    cpu: 10m
-    memory: 32Mi
-  limits:
-    memory: 64Mi
+# Empty on purpose: requests and limits depend on the cluster and on how many zones and records the
+# controller holds, which only the deployment knows. Set them in the deployment's values.
+resources: {}
 
 # ndots:1 so an external name is tried absolute before the search list. The cluster's search list
 # ends with a real public domain, and a wildcard record there answers NOERROR/NODATA rather than

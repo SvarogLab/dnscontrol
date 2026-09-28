@@ -185,14 +185,16 @@ the chart's to own.
    kubectl -n <namespace> create secret generic dnscontrol-gcp --from-file=key.json=<key-file>
    ```
 
-3. Install, with `--check` in `args` until a real diff has gone by:
+3. Install, with `--check` in `args` until a real diff has gone by. The chart sets no resource
+   requests or limits; they depend on the cluster and the size of the zones, so give them here:
 
    ```sh
    helm upgrade --install dnscontrol oci://ghcr.io/svaroglab/dnscontrol/dnscontrol \
      --version <version> -n <namespace> \
      --set config.existingConfigMap=dns-zones \
      --set gcp.existingSecret=dnscontrol-gcp \
-     --set 'args={--watch,--diff,--check}'
+     --set 'args={--watch,--diff,--check}' \
+     --set resources.requests.memory=<request> --set resources.limits.memory=<limit>
    ```
 
    For Argo CD, the same chart is the source with `repoURL: ghcr.io/svaroglab/dnscontrol` and
