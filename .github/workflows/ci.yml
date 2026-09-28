@@ -32,6 +32,40 @@ jobs:
       - name: build
         run: cargo build
 
+  chart:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v5
+
+      - name: helm lint
+        run: |
+          helm lint helm --strict
+          helm lint helm --strict -f .ci/helm-values.yaml
+
+      - name: helm template
+        run: |
+          helm template ci helm > /dev/null
+          helm template ci helm -f .ci/helm-values.yaml > /dev/null
+
+      # The chart deploys DNS automation; a mutable tag would silently change what runs.
+      - name: the rendered image tag must be immutable
+        run: |
+          image=$(helm template ci helm | grep -oE 'image: "[^"]+"' | head -1)
+          echo "$image"
+          case "$image" in
+            *:latest\"|*:\") echo "::error::rendered a mutable image tag: $image"; exit 1 ;;
+          esac
+
+      - name: the guards must fire
+        run: |
+          if helm template ci helm --set image.tag=latest >/dev/null 2>&1; then
+            echo "::error::image.tag=latest was accepted"; exit 1
+          fi
+          if helm template ci helm --set config.existingConfigMap=null >/dev/null 2>&1; then
+            echo "::error::a missing existingConfigMap was accepted"; exit 1
+          fi
+
   # Separate job (not folded into `check`) so an advisory hit is unambiguous in the PR checks
   # list, rather than buried in the same log as an unrelated clippy/test failure.
   security:

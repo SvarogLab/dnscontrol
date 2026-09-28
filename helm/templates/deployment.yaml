@@ -1,0 +1,94 @@
+{{- if not .Values.config.existingConfigMap }}
+{{- fail "config.existingConfigMap is required: the chart mounts a ConfigMap it does not create" }}
+{{- end }}
+{{- $tag := .Values.image.tag | default .Chart.AppVersion }}
+{{- if eq $tag "latest" }}
+{{- fail "image.tag must be an immutable version, not \"latest\"" }}
+{{- end }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "dnscontrol.fullname" . }}
+  labels: {{- include "dnscontrol.labels" . | nindent 4 }}
+spec:
+  # Exactly one, always. Two replicas would race on the same Cloud DNS changes and the loser's
+  # deletions would no longer match, failing its whole atomic change. There is no leader election
+  # by design; Recreate keeps a rollout from briefly running two.
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels: {{- include "dnscontrol.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "dnscontrol.selectorLabels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "dnscontrol.serviceAccountName" . }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      # Longer than the controller's own 45s ceiling on waiting for a Cloud DNS change, so SIGTERM
+      # never lands in the middle of one.
+      terminationGracePeriodSeconds: 60
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: dnscontrol
+          image: "{{ .Values.image.repository }}:{{ $tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args: {{- toYaml .Values.args | nindent 12 }}
+          env:
+            - name: RUST_LOG
+              value: {{ .Values.logLevel | quote }}
+            - name: DNSCONTROL_CONFIG_DIR
+              value: {{ .Values.config.mountPath | quote }}
+            {{- with .Values.gcp.project }}
+            - name: GOOGLE_CLOUD_PROJECT
+              value: {{ . | quote }}
+            {{- end }}
+            {{- if .Values.gcp.existingSecret }}
+            - name: GOOGLE_APPLICATION_CREDENTIALS
+              value: /var/run/secrets/gcp/{{ .Values.gcp.secretKey }}
+            {{- end }}
+          volumeMounts:
+            # No subPath: a subPath mount never receives ConfigMap updates, which would leave the
+            # watch permanently blind.
+            - name: zones
+              mountPath: {{ .Values.config.mountPath }}
+              readOnly: true
+            {{- if .Values.gcp.existingSecret }}
+            - name: gcp-credentials
+              mountPath: /var/run/secrets/gcp
+              readOnly: true
+            {{- end }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources: {{- toYaml .Values.resources | nindent 12 }}
+      volumes:
+        - name: zones
+          configMap:
+            name: {{ .Values.config.existingConfigMap }}
+        {{- if .Values.gcp.existingSecret }}
+        - name: gcp-credentials
+          secret:
+            secretName: {{ .Values.gcp.existingSecret }}
+        {{- end }}
+      {{- with .Values.dnsConfig }}
+      dnsConfig: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity: {{- toYaml . | nindent 8 }}
+      {{- end }}
