@@ -165,6 +165,7 @@ visibly gone.
 
 Each release publishes the image `ghcr.io/svaroglab/dnscontrol` and the Helm chart
 `oci://ghcr.io/svaroglab/dnscontrol/dnscontrol`; chart `X.Y.Z` deploys image `vX.Y.Z` by default.
+The GitHub Release carries the same chart as `dnscontrol-X.Y.Z.tgz`.
 [helm/values.yaml](helm/values.yaml) documents its settings.
 
 The chart deploys the controller: a Deployment, a ServiceAccount, and a mount of a ConfigMap **you**

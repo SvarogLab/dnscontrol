@@ -1,7 +1,7 @@
 # Triggered by the `vX.Y.Z` tag pushed after a release commit bumping Cargo.toml's version.
 # Produces every artifact: a multi-arch image on GHCR, the Helm chart that deploys it (an OCI
-# artifact on GHCR), and the two raw binaries attached to a GitHub Release (so the tool is usable
-# without a cluster).
+# artifact on GHCR), and a GitHub Release carrying the chart archive and the two raw binaries (so
+# the tool is usable without a cluster).
 #
 # Cross-compiles via cargo-zigbuild rather than letting buildx run `cargo build` under QEMU for
 # the arm64 leg - a full rustc build segfaults under emulation.
@@ -170,8 +170,16 @@ jobs:
           echo "$TOKEN" | helm registry login ghcr.io --username "${{ github.actor }}" --password-stdin
           helm push "dnscontrol-${TAG#v}.tgz" "$oci"
 
+      # The same archive that was pushed, so the release asset and the OCI artifact are one chart.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dnscontrol-chart
+          path: dnscontrol-*.tgz
+          if-no-files-found: error
+          retention-days: 1
+
   release:
-    needs: merge
+    needs: [merge, chart]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -181,7 +189,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           path: /tmp/dist
-          pattern: dnscontrol-linux-*
+          pattern: dnscontrol-*
           merge-multiple: true
 
       # The tag's own CHANGELOG.md section becomes the body, so the release and the file cannot
@@ -198,12 +206,13 @@ jobs:
             exit 1
           fi
 
-      - name: Create GitHub Release with both binaries attached
+      - name: Create GitHub Release with both binaries and the chart attached
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release create "${{ github.ref_name }}" \
             /tmp/dist/dnscontrol-linux-amd64 /tmp/dist/dnscontrol-linux-arm64 \
+            /tmp/dist/dnscontrol-*.tgz \
             --title "${{ github.ref_name }}" \
             --notes-file /tmp/notes.md \
             --generate-notes
