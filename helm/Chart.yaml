@@ -6,8 +6,8 @@ description: >-
 type: application
 # Both are stamped from the release tag when the chart is published, so the chart and the image it
 # deploys cannot drift apart. Kept at the current release so a local render pulls a real image.
-version: 0.3.0
-appVersion: "v0.3.0"
+version: 0.4.0
+appVersion: "v0.4.0"
 home: https://github.com/SvarogLab/dnscontrol
 sources:
   - https://github.com/SvarogLab/dnscontrol
