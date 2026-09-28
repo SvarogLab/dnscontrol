@@ -1,6 +1,7 @@
 # Triggered by the `vX.Y.Z` tag pushed after a release commit bumping Cargo.toml's version.
-# Produces both artifacts: a multi-arch image on GHCR (what the Helm chart deploys) and the two
-# raw binaries attached to a GitHub Release (so the tool is usable without a cluster).
+# Produces every artifact: a multi-arch image on GHCR, the Helm chart that deploys it (an OCI
+# artifact on GHCR), and the two raw binaries attached to a GitHub Release (so the tool is usable
+# without a cluster).
 #
 # Cross-compiles via cargo-zigbuild rather than letting buildx run `cargo build` under QEMU for
 # the arm64 leg - a full rustc build segfaults under emulation.
@@ -144,6 +145,30 @@ jobs:
             -t "$IMAGE:${{ github.ref_name }}" \
             -t "$IMAGE:latest" \
             $(printf "$IMAGE@sha256:%s " *)
+
+  # After the image, so a published chart never points at an image that does not exist yet.
+  #
+  # Pushed under the repository path, not the bare owner: `helm push` names the artifact after the
+  # chart, so oci://ghcr.io/svaroglab would land it on ghcr.io/svaroglab/dnscontrol - the image
+  # itself. Under the repository path it becomes ghcr.io/svaroglab/dnscontrol/dnscontrol.
+  chart:
+    needs: merge
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v5
+
+      # The tag is the one version source for the chart and its default image tag. The image is
+      # tagged vX.Y.Z, so appVersion keeps the v; a chart version has to be bare semver.
+      - name: Package and push
+        env:
+          TAG: ${{ github.ref_name }}
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          oci="oci://ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')"
+          helm package helm --version "${TAG#v}" --app-version "$TAG"
+          echo "$TOKEN" | helm registry login ghcr.io --username "${{ github.actor }}" --password-stdin
+          helm push "dnscontrol-${TAG#v}.tgz" "$oci"
 
   release:
     needs: merge

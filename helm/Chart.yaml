@@ -1,0 +1,13 @@
+apiVersion: v2
+name: dnscontrol
+description: >-
+  Converges Google Cloud DNS managed zones and record sets to a directory of declarative YAML,
+  running as a controller that watches a mounted ConfigMap.
+type: application
+# Both are stamped from the release tag when the chart is published, so the chart and the image it
+# deploys cannot drift apart. Kept at the current release so a local render pulls a real image.
+version: 0.2.1
+appVersion: "v0.2.1"
+home: https://github.com/SvarogLab/dnscontrol
+sources:
+  - https://github.com/SvarogLab/dnscontrol

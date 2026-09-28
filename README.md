@@ -161,12 +161,70 @@ non-zero, because a pod that crash-loops on a bad config push is the signal you 
 filesystem watch also exits: a watcher that has stopped seeing changes is worse than one that is
 visibly gone.
 
+## Kubernetes
+
+Each release publishes the image `ghcr.io/svaroglab/dnscontrol` and the Helm chart
+`oci://ghcr.io/svaroglab/dnscontrol/dnscontrol`; chart `X.Y.Z` deploys image `vX.Y.Z` by default.
+[helm/values.yaml](helm/values.yaml) documents its settings.
+
+The chart deploys the controller: a Deployment, a ServiceAccount, and a mount of a ConfigMap **you**
+provide. It creates neither that ConfigMap nor a Secret — the zone data and the credentials are not
+the chart's to own.
+
+1. Create the ConfigMap holding the zone and snippet documents, one key per file:
+
+   ```sh
+   kubectl -n <namespace> create configmap dns-zones --from-file=<zones-dir>
+   ```
+
+2. Unless the cluster runs on GKE with Workload Identity, create a Secret with a service account key
+   holding `roles/dns.admin`:
+
+   ```sh
+   kubectl -n <namespace> create secret generic dnscontrol-gcp --from-file=key.json=<key-file>
+   ```
+
+3. Install, with `--check` in `args` until a real diff has gone by:
+
+   ```sh
+   helm upgrade --install dnscontrol oci://ghcr.io/svaroglab/dnscontrol/dnscontrol \
+     --version <version> -n <namespace> \
+     --set config.existingConfigMap=dns-zones \
+     --set gcp.existingSecret=dnscontrol-gcp \
+     --set 'args={--watch,--diff,--check}'
+   ```
+
+   For Argo CD, the same chart is the source with `repoURL: ghcr.io/svaroglab/dnscontrol` and
+   `chart: dnscontrol`.
+
+4. Read the logs: `converge complete` after startup, with the diff the run would apply. Then drop
+   `--check` and upgrade again.
+
+A GHCR package is private on its first push even from a public repository. Either make it public in
+the package settings, or name a pull secret in `imagePullSecrets`.
+
+What the chart fixes rather than exposes:
+
+- **`replicas: 1`, `strategy: Recreate`.** Two replicas would race on the same Cloud DNS changes,
+  and the loser's deletions would no longer match what is stored, failing its whole atomic change.
+  There is no leader election by design.
+- **The ConfigMap is mounted as a volume, never with `subPath`.** A `subPath` mount never receives
+  ConfigMap updates, which would leave the watch permanently blind.
+- **`terminationGracePeriodSeconds: 60`**, above the controller's own 45-second ceiling on waiting
+  for a Cloud DNS change, so `SIGTERM` never lands mid-change.
+- **`dnsConfig` defaults to `ndots: 1`.** A cluster search list ending in a real public domain with a
+  wildcard record answers every short external name with NOERROR/NODATA, and `getaddrinfo` stops
+  there instead of trying the absolute name. The controller resolves nothing in-cluster.
+- **`--delete-undeclared-zones` is not in the default `args`.** Retiring a zone is not something a
+  controller should do in reaction to a ConfigMap edit.
+
 ## Development
 
 ```bash
 cargo fmt --all -- --check
 cargo clippy --all-targets --all-features -- -D warnings
 cargo test
+helm lint helm --strict -f .ci/helm-values.yaml
 ```
 
 Everything committed here — examples, test fixtures, sample output — uses only RFC 2606

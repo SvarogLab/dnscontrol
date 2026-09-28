@@ -1,0 +1,64 @@
+# Defaults only. Real zone data, project names and credentials belong in the deployment's own
+# values file, never here.
+
+image:
+  repository: ghcr.io/svaroglab/dnscontrol
+  # Empty means .Chart.AppVersion. Always an immutable vX.Y.Z; never "latest".
+  tag: ""
+  pullPolicy: IfNotPresent
+
+# Needed when the GHCR package is private. A package is private on first push even when its
+# repository is public - GHCR does not inherit repository visibility - so either flip it in the
+# package settings, or name a pull secret here.
+imagePullSecrets: []
+# - name: ghcr-credentials
+
+config:
+  # The ConfigMap holding the zone and snippet documents. Created outside this chart - the chart
+  # deploys the controller, it does not own your DNS.
+  existingConfigMap: dns-zones
+  mountPath: /etc/dnscontrol
+
+gcp:
+  # Empty means the project is taken from the credentials key, then the metadata server.
+  project: ""
+  # Secret holding a service account key. Leave empty to use Workload Identity, where the metadata
+  # server supplies credentials and nothing is mounted.
+  existingSecret: ""
+  secretKey: key.json
+
+# --check makes every run read-only. Keep it on until you have watched a real diff go by.
+# Deliberately absent: --delete-undeclared-zones. A controller reacting to a ConfigMap should not
+# hold the one irreversible switch; run that by hand when you actually mean to retire a zone.
+args:
+  - --watch
+  - --diff
+
+logLevel: info
+
+serviceAccount:
+  create: true
+  name: ""
+  # For Workload Identity:
+  #   iam.gke.io/gcp-service-account: dnscontrol@<project>.iam.gserviceaccount.com
+  annotations: {}
+
+resources:
+  requests:
+    cpu: 10m
+    memory: 32Mi
+  limits:
+    memory: 64Mi
+
+# ndots:1 so an external name is tried absolute before the search list. The cluster's search list
+# ends with a real public domain, and a wildcard record there answers NOERROR/NODATA rather than
+# NXDOMAIN - which stops getaddrinfo's search before it ever reaches the absolute name. This
+# controller resolves nothing in-cluster, so there is no cost.
+dnsConfig:
+  options:
+    - name: ndots
+      value: "1"
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
