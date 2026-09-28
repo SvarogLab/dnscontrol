@@ -11,3 +11,8 @@ imagePullSecrets:
   - name: ghcr-credentials
 nodeSelector:
   kubernetes.io/os: linux
+resources:
+  requests:
+    memory: 24Mi
+  limits:
+    memory: 48Mi

@@ -70,7 +70,9 @@ spec:
             readOnlyRootFilesystem: true
             capabilities:
               drop: ["ALL"]
-          resources: {{- toYaml .Values.resources | nindent 12 }}
+          {{- with .Values.resources }}
+          resources: {{- toYaml . | nindent 12 }}
+          {{- end }}
       volumes:
         - name: zones
           configMap:

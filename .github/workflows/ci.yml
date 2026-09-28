@@ -66,6 +66,15 @@ jobs:
             echo "::error::a missing existingConfigMap was accepted"; exit 1
           fi
 
+      # Requests and limits belong to the deployment, which knows its cluster and its zone count.
+      - name: resources come from the values, never from the chart
+        run: |
+          if helm template ci helm | grep -q 'resources:'; then
+            echo "::error::the chart rendered resources of its own"; exit 1
+          fi
+          helm template ci helm -f .ci/helm-values.yaml | grep -q 'memory: 48Mi' \
+            || { echo "::error::resources from the values were not rendered"; exit 1; }
+
   # Separate job (not folded into `check`) so an advisory hit is unambiguous in the PR checks
   # list, rather than buried in the same log as an unrelated clippy/test failure.
   security:
