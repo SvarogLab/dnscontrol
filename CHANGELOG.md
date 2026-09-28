@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 This project adheres to [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 and follows [Semantic Versioning](https://semver.org/).
 
+## [0.2.1] - 2026-09-28
+
+### Build system 🛠️
+
+- Update dependencies to their latest compatible releases
+
+### Fixed 🐛
+
+- Update rustls to 0.23.45 for RUSTSEC-2026-0285
+- Stop waking the loop on its own directory reads
+
+### Miscellaneous 🧹
+
+- Move markdownlint config to the skeleton .markdownlint-cli2.jsonc
+
+### Tests ✅
+
+- Drop the assertion naming the removed flag
+
 ## [0.2.0] - 2026-08-23
 
 ### Added ✨
