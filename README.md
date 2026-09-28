@@ -200,8 +200,8 @@ the chart's to own.
 4. Read the logs: `converge complete` after startup, with the diff the run would apply. Then drop
    `--check` and upgrade again.
 
-A GHCR package is private on its first push even from a public repository. Either make it public in
-the package settings, or name a pull secret in `imagePullSecrets`.
+The image and the chart are public and pull without credentials. `imagePullSecrets` is for an image
+pulled from a private mirror instead.
 
 What the chart fixes rather than exposes:
 

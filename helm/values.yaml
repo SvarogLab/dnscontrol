@@ -7,9 +7,7 @@ image:
   tag: ""
   pullPolicy: IfNotPresent
 
-# Needed when the GHCR package is private. A package is private on first push even when its
-# repository is public - GHCR does not inherit repository visibility - so either flip it in the
-# package settings, or name a pull secret here.
+# Only for an image pulled from a private mirror; the published image is public.
 imagePullSecrets: []
 # - name: ghcr-credentials
 
