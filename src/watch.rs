@@ -4,8 +4,10 @@ use crate::load::{self, ConfigFile};
 use crate::model::Counts;
 use crate::run::converge;
 use anyhow::{Context, Result, bail};
-use notify::{EventKind, RecursiveMode};
-use notify_debouncer_full::{DebounceEventResult, new_debouncer};
+use notify::event::{AccessKind, AccessMode};
+use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode};
+use notify_debouncer_full::{DebounceEventResult, Debouncer, RecommendedCache, new_debouncer};
+use std::path::Path;
 use std::time::Duration;
 use tokio::signal::unix::{SignalKind, signal};
 use tokio::sync::mpsc;
@@ -32,53 +34,11 @@ pub async fn run(cli: &Cli, dns: &Dns) -> Result<Counts> {
         tracing::debug!("config directory looks like a Kubernetes ConfigMap mount");
     }
 
-    let (wake_tx, mut wake_rx) = mpsc::channel::<()>(1);
-    let (err_tx, mut err_rx) = mpsc::channel::<String>(1);
-
-    let watched = dir.to_path_buf();
-    let mut debouncer = new_debouncer(
-        Duration::from_millis(cli.debounce_ms),
-        None,
-        move |result: DebounceEventResult| match result {
-            // A full channel already means "a converge is pending", so dropping the send is the
-            // coalescing, not a lost event.
-            Ok(events) => {
-                for event in &events {
-                    tracing::debug!(kind = ?event.kind, paths = ?event.paths, "fs event");
-                }
-                // notify reports the watched directory being removed as an ordinary Remove event,
-                // never as a watch error - so this has to be caught here or the process lives on
-                // with an inotify watch bound to a dead inode, seeing nothing, forever. Recreating
-                // the directory at the same path does not revive it either.
-                if events
-                    .iter()
-                    .any(|e| matches!(e.kind, EventKind::Remove(_)) && e.paths.contains(&watched))
-                {
-                    let _ = err_tx.try_send(format!("{} was removed", watched.display()));
-                    return;
-                }
-                let _ = wake_tx.try_send(());
-            }
-            Err(errors) => {
-                let _ = err_tx.try_send(format!("{errors:?}"));
-            }
-        },
-    )
-    .context("failed to start the filesystem watcher")?;
-
-    // Always non-recursive, and always on the directory rather than the files.
-    //
-    // A ConfigMap key is a symlink into `..data` whose target string never changes; inotify
-    // dereferences it, binds to the doomed timestamped inode, and dies with IN_DELETE_SELF on the
-    // first update. The same failure hits vim/VS Code/`mv` write-then-rename on a laptop. A
-    // directory watch sees kubelet's `rename("..data_tmp", "..data")` as IN_MOVED_TO directly
-    // inside the watched directory, and an editor's save as IN_MODIFY — one mechanism, both modes.
-    //
-    // Recursive would be worse: notify follows symlinks when recursing, so it would descend into
-    // the not-yet-live timestamped directory and race its deletion.
-    debouncer
-        .watch(dir, RecursiveMode::NonRecursive)
-        .with_context(|| format!("failed to watch {}", dir.display()))?;
+    let Watch {
+        debouncer,
+        mut wake_rx,
+        mut err_rx,
+    } = start_watch(dir, Duration::from_millis(cli.debounce_ms))?;
     tracing::info!(dir = %dir.display(), debounce_ms = cli.debounce_ms, "watching");
 
     let mut sigterm =
@@ -150,6 +110,98 @@ pub async fn run(cli: &Cli, dns: &Dns) -> Result<Counts> {
 
     debouncer.stop();
     Ok(state.counts)
+}
+
+/// A live filesystem watch and the two channels it reports on. Dropping `debouncer` ends it.
+struct Watch {
+    debouncer: Debouncer<RecommendedWatcher, RecommendedCache>,
+    /// The config may have changed. At most one wake-up is ever queued: a full channel already
+    /// means "a converge is pending", so dropping the send is the coalescing, not a lost event.
+    wake_rx: mpsc::Receiver<()>,
+    /// The watch is dead and cannot recover on its own.
+    err_rx: mpsc::Receiver<String>,
+}
+
+fn start_watch(dir: &Path, debounce: Duration) -> Result<Watch> {
+    let (wake_tx, wake_rx) = mpsc::channel::<()>(1);
+    let (err_tx, err_rx) = mpsc::channel::<String>(1);
+
+    let watched = dir.to_path_buf();
+    let on_events = move |result: DebounceEventResult| match result {
+        Ok(events) => {
+            for event in &events {
+                tracing::debug!(kind = ?event.kind, paths = ?event.paths, "fs event");
+            }
+            match wake_for(events.iter().map(|e| &e.event), &watched) {
+                Wake::Reload => {
+                    let _ = wake_tx.try_send(());
+                }
+                Wake::DirRemoved => {
+                    let _ = err_tx.try_send(format!("{} was removed", watched.display()));
+                }
+                Wake::Nothing => {}
+            }
+        }
+        Err(errors) => {
+            let _ = err_tx.try_send(format!("{errors:?}"));
+        }
+    };
+    let mut debouncer = new_debouncer(debounce, None, on_events)
+        .context("failed to start the filesystem watcher")?;
+
+    // Always non-recursive, and always on the directory rather than the files.
+    //
+    // A ConfigMap key is a symlink into `..data` whose target string never changes; inotify
+    // dereferences it, binds to the doomed timestamped inode, and dies with IN_DELETE_SELF on the
+    // first update. The same failure hits vim/VS Code/`mv` write-then-rename on a laptop. A
+    // directory watch sees kubelet's `rename("..data_tmp", "..data")` as IN_MOVED_TO directly
+    // inside the watched directory, and an editor's save as IN_MODIFY — one mechanism, both modes.
+    //
+    // Recursive would be worse: notify follows symlinks when recursing, so it would descend into
+    // the not-yet-live timestamped directory and race its deletion.
+    debouncer
+        .watch(dir, RecursiveMode::NonRecursive)
+        .with_context(|| format!("failed to watch {}", dir.display()))?;
+
+    Ok(Watch {
+        debouncer,
+        wake_rx,
+        err_rx,
+    })
+}
+
+/// What a batch of filesystem events asks of the converge loop.
+#[derive(Debug, PartialEq, Eq)]
+enum Wake {
+    Nothing,
+    Reload,
+    DirRemoved,
+}
+
+fn wake_for<'a>(events: impl IntoIterator<Item = &'a Event>, watched: &Path) -> Wake {
+    let mut wake = Wake::Nothing;
+    for event in events {
+        // notify reports the watched directory being removed as an ordinary Remove event, never
+        // as a watch error - so this has to be caught here or the process lives on with an inotify
+        // watch bound to a dead inode, seeing nothing, forever. Recreating the directory at the
+        // same path does not revive it either.
+        if matches!(event.kind, EventKind::Remove(_)) && event.paths.iter().any(|p| p == watched) {
+            return Wake::DirRemoved;
+        }
+        if can_change_content(&event.kind) {
+            wake = Wake::Reload;
+        }
+    }
+    wake
+}
+
+/// notify subscribes to IN_OPEN, and the loop lists the directory on every wake-up — so waking on
+/// an open would have the loop wake itself, re-reading the config every debounce interval forever.
+fn can_change_content(kind: &EventKind) -> bool {
+    match kind {
+        EventKind::Access(access) => *access == AccessKind::Close(AccessMode::Write),
+        _ => true,
+    }
 }
 
 /// First and longest wait between retries of a converge Google could not serve.
@@ -245,6 +297,8 @@ fn log_converge(cli: &Cli, counts: &Counts, trigger: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use notify::event::{CreateKind, DataChange, ModifyKind, RemoveKind, RenameMode};
+    use std::path::PathBuf;
 
     fn files(pairs: &[(&str, &str)]) -> Vec<ConfigFile> {
         pairs
@@ -328,5 +382,95 @@ mod tests {
     fn a_renamed_file_with_the_same_content_reconverges() {
         let last = files(&[("a.yaml", "x")]);
         assert!(should_reconverge(Some(&last), &files(&[("b.yaml", "x")])));
+    }
+
+    const DIR: &str = "/etc/dnscontrol";
+
+    fn event(kind: EventKind, path: &str) -> Event {
+        Event::new(kind).add_path(PathBuf::from(path))
+    }
+
+    fn wake(events: &[Event]) -> Wake {
+        wake_for(events, Path::new(DIR))
+    }
+
+    #[test]
+    fn opening_or_reading_is_not_a_change() {
+        for kind in [
+            AccessKind::Open(AccessMode::Any),
+            AccessKind::Read,
+            AccessKind::Close(AccessMode::Read),
+        ] {
+            let e = event(EventKind::Access(kind), DIR);
+            assert_eq!(wake(&[e]), Wake::Nothing, "for {kind:?}");
+        }
+    }
+
+    #[test]
+    fn anything_that_can_change_content_reloads() {
+        let file = "/etc/dnscontrol/a.yaml";
+        for kind in [
+            EventKind::Create(CreateKind::File),
+            EventKind::Modify(ModifyKind::Data(DataChange::Any)),
+            EventKind::Modify(ModifyKind::Name(RenameMode::To)),
+            EventKind::Access(AccessKind::Close(AccessMode::Write)),
+            EventKind::Remove(RemoveKind::File),
+            EventKind::Any,
+        ] {
+            assert_eq!(wake(&[event(kind, file)]), Wake::Reload, "for {kind:?}");
+        }
+    }
+
+    #[test]
+    fn a_change_among_opens_still_reloads() {
+        let open = event(EventKind::Access(AccessKind::Open(AccessMode::Any)), DIR);
+        let write = event(
+            EventKind::Modify(ModifyKind::Data(DataChange::Any)),
+            "/etc/dnscontrol/a.yaml",
+        );
+        assert_eq!(wake(&[open.clone(), write, open]), Wake::Reload);
+    }
+
+    #[test]
+    fn removing_the_watched_directory_outranks_a_reload() {
+        let write = event(
+            EventKind::Modify(ModifyKind::Data(DataChange::Any)),
+            "/etc/dnscontrol/a.yaml",
+        );
+        let gone = event(EventKind::Remove(RemoveKind::Folder), DIR);
+        assert_eq!(wake(&[write, gone]), Wake::DirRemoved);
+    }
+
+    fn scratch_dir(name: &str) -> PathBuf {
+        let dir =
+            std::env::temp_dir().join(format!("dnscontrol-watch-{}-{name}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir(&dir).expect("scratch dir");
+        dir
+    }
+
+    /// Against the real inotify, which reports the directory being listed as IN_OPEN on the watch
+    /// itself. The loop lists the directory on every wake-up, so a wake-up on that open feeds the
+    /// loop its own reads: an idle controller re-reading its config every debounce interval, forever.
+    #[test]
+    fn listing_the_watched_directory_does_not_wake_the_loop() {
+        let dir = scratch_dir("listing");
+        std::fs::write(dir.join("a.yaml"), "x").expect("write");
+        let settle = Duration::from_millis(500);
+        let mut watch = start_watch(&dir, Duration::from_millis(50)).expect("watch starts");
+
+        std::fs::read_dir(&dir).expect("list").for_each(drop);
+        std::thread::sleep(settle);
+        let listed = watch.wake_rx.try_recv();
+
+        // The control: a real edit must still get through, or the silence above proves nothing.
+        std::fs::write(dir.join("a.yaml"), "y").expect("write");
+        std::thread::sleep(settle);
+        let edited = watch.wake_rx.try_recv();
+
+        drop(watch);
+        std::fs::remove_dir_all(&dir).expect("cleanup");
+        assert!(listed.is_err(), "listing the directory woke the loop");
+        assert!(edited.is_ok(), "an edit did not wake the loop");
     }
 }

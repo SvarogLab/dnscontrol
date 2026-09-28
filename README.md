@@ -148,8 +148,9 @@ That is what makes one mechanism work in both places: a Kubernetes ConfigMap key
 on the first update — and the same failure hits `vim`, `mv` and `git checkout` on a laptop.
 
 Events are debounced, then the directory is re-read and compared; identical content skips the
-converge entirely. There is no periodic resync: the tool reconverges on a config change and nothing
-else, which is what lets an ACME solver own its own records in peace.
+converge entirely. An event that only opens or reads a file is ignored — the re-read itself raises
+one, and waking on it would keep the loop re-reading forever. There is no periodic resync: the tool
+reconverges on a config change and nothing else, which is what lets an ACME solver own its own records in peace.
 
 A converge in flight always finishes before `SIGTERM` is acted on.
 
