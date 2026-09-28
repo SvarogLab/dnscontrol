@@ -54,6 +54,7 @@ jobs:
           image=$(helm template ci helm | grep -oE 'image: "[^"]+"' | head -1)
           echo "$image"
           case "$image" in
+            "") echo "::error::the chart rendered no image reference"; exit 1 ;;
             *:latest\"|*:\") echo "::error::rendered a mutable image tag: $image"; exit 1 ;;
           esac
 
