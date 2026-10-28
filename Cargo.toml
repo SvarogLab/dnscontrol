@@ -12,7 +12,7 @@ name = "dnscontrol"
 path = "src/main.rs"
 
 [dependencies]
-google-cloud-dns-v1 = "1.7.0"
+google-cloud-dns-v1 = "2.0.0"
 google-cloud-auth = "1.17.0"
 
 # ItemPaginator must be `use`d for .next() to resolve; retry/backoff policies live here too.
