@@ -20,7 +20,7 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: verify Cargo.toml version matches the tag
         run: |
@@ -43,7 +43,7 @@ jobs:
           - arch: arm64
             rust_target: aarch64-unknown-linux-musl
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # github.repository keeps the owner's original casing, and an OCI reference must be
       # lowercase - "ghcr.io/SvarogLab/..." is rejected outright.
@@ -155,7 +155,7 @@ jobs:
     needs: merge
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: azure/setup-helm@v5
 
       # The tag is the one version source for the chart and its default image tag. The image is
@@ -184,7 +184,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/download-artifact@v4
         with:
