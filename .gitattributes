@@ -3,7 +3,6 @@
 *.rs text eol=lf diff=rust
 
 # 📦 Cargo
-Cargo.lock linguist-generated
 Cargo.toml text eol=lf
 
 # 📝 Markdown documentation
