@@ -5,6 +5,38 @@ All notable changes to this project will be documented in this file.
 This project adheres to [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 and follows [Semantic Versioning](https://semver.org/).
 
+## [0.4.1] - 2026-11-11
+
+### Build system 🛠️
+
+- Stop tracking the lockfile
+- Track the lockfile and check it with cargo-deny (#19)
+
+### CI/CD ⚙️
+
+- Fail the image tag check when the chart renders no image
+- Attach the release chart by its exact name
+
+### Fixed 🐛
+
+- Update rust crate google-cloud-dns-v1 to v2
+- Update rust crate serde-saphyr to v2
+- Update google-cloud-rust monorepo (#20)
+- Update rust crate notify to 8.2.2 (#21)
+- Update rust crate serde_json to 1.0.154 (#22)
+- Update rust crate serde-saphyr to 2.1.1 (#23)
+- Update rust crate tokio to 1.54.1 (#24)
+
+### Miscellaneous 🧹
+
+- Let renovate update dependencies through the shared preset
+- Update actions/checkout action to v7
+- Update docker/build-push-action action to v7
+- Update docker/login-action action to v4
+- Update docker/setup-buildx-action action to v4
+- Update github artifact actions
+- Update docker/setup-qemu-action action to v4
+
 ## [0.4.0] - 2026-09-28
 
 ### Added ✨
