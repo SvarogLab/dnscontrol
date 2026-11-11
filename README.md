@@ -161,6 +161,20 @@ non-zero, because a pod that crash-loops on a bad config push is the signal you 
 filesystem watch also exits: a watcher that has stopped seeing changes is worse than one that is
 visibly gone.
 
+## Releasing
+
+Run **Release PR** from the Actions tab. It opens `chore: release vX.Y.Z`, with the version that
+`git-cliff` computes from the commits since the last tag (or the one given) moved into `Cargo.toml`,
+`Cargo.lock` and `helm/Chart.yaml`, and `CHANGELOG.md` regenerated. Merge it, then tag the merge
+commit and push the tag:
+
+```sh
+git tag vX.Y.Z <merge commit> && git push origin vX.Y.Z
+```
+
+The tag starts `release.yml`, which checks it against `Cargo.toml` and publishes what the next section
+describes. A tag pushed with the workflow's own token would start nothing, so this step stays by hand.
+
 ## Kubernetes
 
 Each release publishes the image `ghcr.io/svaroglab/dnscontrol` and the Helm chart
