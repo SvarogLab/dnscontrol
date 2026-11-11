@@ -35,7 +35,7 @@ tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 
 # inotify, watched non-recursively on the config directory - see src/watch.rs.
-notify = "8.2.0"
+notify = "8.2.2"
 
 # One ConfigMap update produces a burst of inotify events; debouncing collapses them into one
 # converge. 0.7 requires notify ^8.2, matching the pin above.
