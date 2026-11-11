@@ -1,0 +1,24 @@
+name: Release PR
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to release; empty computes it from the commits since the last tag.
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  release-pr:
+    uses: SvarogLab/.github/.github/workflows/release-pr.yml@v2.1
+    permissions:
+      contents: write
+      pull-requests: write
+    with:
+      version: ${{ inputs.version }}
+      # The chart's version and the image tag it deploys move with the crate's.
+      bump: >-
+        sed -i "s/^version = \".*\"/version = \"$VERSION_NUMBER\"/" Cargo.toml &&
+        sed -i "s/^version: .*/version: $VERSION_NUMBER/; s/^appVersion: .*/appVersion: \"$VERSION\"/" helm/Chart.yaml
