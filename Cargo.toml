@@ -19,7 +19,7 @@ google-cloud-auth = "1.17.0"
 google-cloud-gax = "1.15.0"
 
 # Service account keys are JSON, and project_id is resolved out of one.
-serde_json = "1.0.151"
+serde_json = "1.0.154"
 
 serde = { version = "1.0.229", features = ["derive"] }
 
