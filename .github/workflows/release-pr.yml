@@ -14,11 +14,12 @@ jobs:
   release-pr:
     uses: SvarogLab/.github/.github/workflows/release-pr.yml@v3
     permissions:
-      contents: write
-      pull-requests: write
+      contents: read
     with:
       version: ${{ inputs.version }}
       # The chart's version and the image tag it deploys move with the crate's.
       bump: >-
         sed -i "s/^version = \".*\"/version = \"$VERSION_NUMBER\"/" Cargo.toml &&
         sed -i "s/^version: .*/version: $VERSION_NUMBER/; s/^appVersion: .*/appVersion: \"$VERSION\"/" helm/Chart.yaml
+    secrets:
+      CI_APP_PRIVATE_KEY: ${{ secrets.CI_APP_PRIVATE_KEY }}
