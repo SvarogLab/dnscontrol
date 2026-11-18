@@ -26,9 +26,9 @@ serde = { version = "1.0.229", features = ["derive"] }
 # The Rust target type is the schema: `target: [192.0.2.10]` deserializes into Vec<String> instead
 # of erroring as "invalid type: integer", and `name: no` stays the string "no". serde_yaml has been
 # deprecated since 2024.
-serde-saphyr = "2.1.1"
+serde-saphyr = "2.2.0"
 
-clap = { version = "4.6.7", features = ["derive", "env"] }
+clap = { version = "4.6.8", features = ["derive", "env"] }
 anyhow = "1.0.104"
 tokio = { version = "1.54.1", features = ["rt-multi-thread", "macros", "signal", "sync", "time"] }
 tracing = "0.1.44"
@@ -48,5 +48,5 @@ reqwest = { version = "0.13.5", default-features = false }
 [dev-dependencies]
 # Only to hand-build a gax error in watch.rs's retry-classification tests; both are already in the
 # tree via google-cloud-gax.
-bytes = "1.12.1"
+bytes = "1.12.2"
 http = "1.5.0"
