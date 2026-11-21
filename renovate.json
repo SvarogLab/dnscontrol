@@ -1,4 +1,12 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["github>SvarogLab/.github"]
+  "extends": ["github>SvarogLab/.github"],
+  "packageRules": [
+    {
+      "description": "notify-debouncer-full pins a notify major: one moves only with the other.",
+      "matchPackageNames": ["notify", "notify-debouncer-full"],
+      "groupName": "notify",
+      "separateMajorMinor": false
+    }
+  ]
 }
