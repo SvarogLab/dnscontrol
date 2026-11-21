@@ -35,11 +35,11 @@ tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 
 # inotify, watched non-recursively on the config directory - see src/watch.rs.
-notify = "8.2.2"
+notify = "9.0.0"
 
 # One ConfigMap update produces a burst of inotify events; debouncing collapses them into one
 # converge. 0.7 requires notify ^8.2, matching the pin above.
-notify-debouncer-full = "0.7.0"
+notify-debouncer-full = "0.8.0"
 
 # Only for the GCE/GKE metadata server, which is plain HTTP on a link-local address - hence no TLS
 # features. google-cloud-auth already pulls reqwest in; this just makes the dependency explicit.
