@@ -18,6 +18,8 @@ allow = [
   "CDLA-Permissive-2.0",
   # notify; a public-domain dedication puts no condition on either license.
   "CC0-1.0",
+  # xxhash-rust, through notify 9; it asks for its notice in source copies only, not in binaries.
+  "BSL-1.0",
 ]
 confidence-threshold = 0.93
 
