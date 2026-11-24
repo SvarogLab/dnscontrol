@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: ["**"]
+    branches: [main]
   pull_request:
   # An advisory published against a locked version reaches no pull request: only the audit on main
   # shows it.
@@ -14,10 +14,12 @@ permissions:
 
 jobs:
   rust:
-    uses: SvarogLab/.github/.github/workflows/rust.yml@v3.1
+    uses: SvarogLab/.github/.github/workflows/rust.yml@feat/image-and-chart-workflows
+    with:
+      binaries: dnscontrol
 
-  chart:
-    runs-on: ubuntu-latest
+  helm:
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v7
       - uses: azure/setup-helm@v5
@@ -59,3 +61,53 @@ jobs:
           fi
           helm template ci helm -f .ci/helm-values.yaml | grep -q 'memory: 48Mi' \
             || { echo "::error::resources from the values were not rendered"; exit 1; }
+
+  image-check:
+    if: github.event_name == 'pull_request'
+    uses: SvarogLab/.github/.github/workflows/image.yml@feat/image-and-chart-workflows
+    permissions:
+      contents: read
+      packages: write
+    with:
+      push: false
+      binaries: dnscontrol
+
+  tag:
+    needs: [rust, helm]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    uses: SvarogLab/.github/.github/workflows/tag-release.yml@feat/image-and-chart-workflows
+    permissions:
+      contents: write
+
+  image:
+    needs: tag
+    if: needs.tag.outputs.tag != ''
+    uses: SvarogLab/.github/.github/workflows/image.yml@feat/image-and-chart-workflows
+    permissions:
+      contents: read
+      packages: write
+    with:
+      tag: ${{ needs.tag.outputs.tag }}
+
+  chart:
+    needs: [tag, image]
+    uses: SvarogLab/.github/.github/workflows/chart.yml@feat/image-and-chart-workflows
+    permissions:
+      contents: read
+      packages: write
+    with:
+      tag: ${{ needs.tag.outputs.tag }}
+
+  release:
+    needs: [tag, chart]
+    uses: SvarogLab/.github/.github/workflows/release.yml@feat/image-and-chart-workflows
+    permissions:
+      contents: write
+    with:
+      tag: ${{ needs.tag.outputs.tag }}
+      download-binaries: true
+      download-chart: true
+      prepare: |
+        cp binaries/amd64/release/dnscontrol dnscontrol-linux-amd64
+        cp binaries/arm64/release/dnscontrol dnscontrol-linux-arm64
+      assets: dnscontrol-linux-amd64 dnscontrol-linux-arm64

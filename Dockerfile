@@ -1,7 +1,5 @@
-# Packaging only - expects the binary already cross-compiled locally/in CI via:
-#   cargo zigbuild --release --target x86_64-unknown-linux-musl
-# (a full rustc build segfaults under QEMU emulation for a non-native --platform, so nothing is
-# compiled inside this Dockerfile.)
+# Packaging only: the binary is the musl release build for TARGETARCH, staged at
+# target/<arch>/release/ by CI or by hand.
 #
 # google-cloud-auth's reqwest/rustls stack verifies googleapis.com through rustls-platform-verifier,
 # which reads the OS trust store from the filesystem - there is no compiled-in root bundle, so a
