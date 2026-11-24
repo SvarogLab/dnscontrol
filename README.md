@@ -165,15 +165,8 @@ visibly gone.
 
 Run **Release PR** from the Actions tab. It opens `chore: release vX.Y.Z`, with the version that
 `git-cliff` computes from the commits since the last tag (or the one given) moved into `Cargo.toml`,
-`Cargo.lock` and `helm/Chart.yaml`, and `CHANGELOG.md` regenerated. Merge it, then tag the merge
-commit and push the tag:
-
-```sh
-git tag vX.Y.Z <merge commit> && git push origin vX.Y.Z
-```
-
-The tag starts `release.yml`, which checks it against `Cargo.toml` and publishes what the next section
-describes. A tag pushed with the workflow's own token would start nothing, so this step stays by hand.
+`Cargo.lock` and `helm/Chart.yaml`, and `CHANGELOG.md` regenerated. Merging it tags the merge commit
+and publishes, in that run, what the next section describes.
 
 ## Kubernetes
 

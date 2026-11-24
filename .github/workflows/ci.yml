@@ -2,38 +2,24 @@ name: CI
 
 on:
   push:
-    branches: ["**"]
+    branches: [main]
   pull_request:
+  # An advisory published against a locked version reaches no pull request: only the audit on main
+  # shows it.
+  schedule:
+    - cron: "0 6 * * *"
 
 permissions:
   contents: read
 
 jobs:
-  check:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
+  rust:
+    uses: SvarogLab/.github/.github/workflows/rust.yml@v3.2
+    with:
+      binaries: dnscontrol
 
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt, clippy
-
-      - uses: Swatinem/rust-cache@v2
-
-      - name: fmt
-        run: cargo fmt --all -- --check
-
-      - name: clippy
-        run: cargo clippy --all-targets --all-features -- -D warnings
-
-      - name: test
-        run: cargo test
-
-      - name: build
-        run: cargo build
-
-  chart:
-    runs-on: ubuntu-latest
+  helm:
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v7
       - uses: azure/setup-helm@v5
@@ -76,21 +62,52 @@ jobs:
           helm template ci helm -f .ci/helm-values.yaml | grep -q 'memory: 48Mi' \
             || { echo "::error::resources from the values were not rendered"; exit 1; }
 
-  # Separate job (not folded into `check`) so an advisory hit is unambiguous in the PR checks
-  # list, rather than buried in the same log as an unrelated clippy/test failure.
-  security:
-    runs-on: ubuntu-latest
+  image-check:
+    if: github.event_name == 'pull_request'
+    uses: SvarogLab/.github/.github/workflows/image.yml@v3.2
     permissions:
       contents: read
-      issues: write
-      checks: write
-    steps:
-      - uses: actions/checkout@v7
+      packages: write
+    with:
+      push: false
+      binaries: dnscontrol
 
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+  tag:
+    needs: [rust, helm]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    uses: SvarogLab/.github/.github/workflows/tag-release.yml@v3.2
+    permissions:
+      contents: write
 
-      - name: cargo audit
-        run: |
-          cargo install cargo-audit --locked
-          cargo audit
+  image:
+    needs: tag
+    if: needs.tag.outputs.tag != ''
+    uses: SvarogLab/.github/.github/workflows/image.yml@v3.2
+    permissions:
+      contents: read
+      packages: write
+    with:
+      tag: ${{ needs.tag.outputs.tag }}
+
+  chart:
+    needs: [tag, image]
+    uses: SvarogLab/.github/.github/workflows/chart.yml@v3.2
+    permissions:
+      contents: read
+      packages: write
+    with:
+      tag: ${{ needs.tag.outputs.tag }}
+
+  release:
+    needs: [tag, chart]
+    uses: SvarogLab/.github/.github/workflows/release.yml@v3.2
+    permissions:
+      contents: write
+    with:
+      tag: ${{ needs.tag.outputs.tag }}
+      download-binaries: true
+      download-chart: true
+      prepare: |
+        cp binaries/amd64/release/dnscontrol dnscontrol-linux-amd64
+        cp binaries/arm64/release/dnscontrol dnscontrol-linux-arm64
+      assets: dnscontrol-linux-amd64 dnscontrol-linux-arm64
