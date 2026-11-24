@@ -4,33 +4,17 @@ on:
   push:
     branches: ["**"]
   pull_request:
+  # An advisory published against a locked version reaches no pull request: only the audit on main
+  # shows it.
+  schedule:
+    - cron: "0 6 * * *"
 
 permissions:
   contents: read
 
 jobs:
-  check:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt, clippy
-
-      - uses: Swatinem/rust-cache@v2
-
-      - name: fmt
-        run: cargo fmt --all -- --check
-
-      - name: clippy
-        run: cargo clippy --all-targets --all-features -- -D warnings
-
-      - name: test
-        run: cargo test
-
-      - name: build
-        run: cargo build
+  rust:
+    uses: SvarogLab/.github/.github/workflows/rust.yml@v3.1
 
   chart:
     runs-on: ubuntu-latest
@@ -75,22 +59,3 @@ jobs:
           fi
           helm template ci helm -f .ci/helm-values.yaml | grep -q 'memory: 48Mi' \
             || { echo "::error::resources from the values were not rendered"; exit 1; }
-
-  # Separate job (not folded into `check`) so an advisory hit is unambiguous in the PR checks
-  # list, rather than buried in the same log as an unrelated clippy/test failure.
-  security:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      issues: write
-      checks: write
-    steps:
-      - uses: actions/checkout@v7
-
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-
-      - name: cargo audit
-        run: |
-          cargo install cargo-audit --locked
-          cargo audit
