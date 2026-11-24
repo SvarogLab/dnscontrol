@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   rust:
-    uses: SvarogLab/.github/.github/workflows/rust.yml@feat/image-and-chart-workflows
+    uses: SvarogLab/.github/.github/workflows/rust.yml@v3.2
     with:
       binaries: dnscontrol
 
@@ -64,7 +64,7 @@ jobs:
 
   image-check:
     if: github.event_name == 'pull_request'
-    uses: SvarogLab/.github/.github/workflows/image.yml@feat/image-and-chart-workflows
+    uses: SvarogLab/.github/.github/workflows/image.yml@v3.2
     permissions:
       contents: read
       packages: write
@@ -75,14 +75,14 @@ jobs:
   tag:
     needs: [rust, helm]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    uses: SvarogLab/.github/.github/workflows/tag-release.yml@feat/image-and-chart-workflows
+    uses: SvarogLab/.github/.github/workflows/tag-release.yml@v3.2
     permissions:
       contents: write
 
   image:
     needs: tag
     if: needs.tag.outputs.tag != ''
-    uses: SvarogLab/.github/.github/workflows/image.yml@feat/image-and-chart-workflows
+    uses: SvarogLab/.github/.github/workflows/image.yml@v3.2
     permissions:
       contents: read
       packages: write
@@ -91,7 +91,7 @@ jobs:
 
   chart:
     needs: [tag, image]
-    uses: SvarogLab/.github/.github/workflows/chart.yml@feat/image-and-chart-workflows
+    uses: SvarogLab/.github/.github/workflows/chart.yml@v3.2
     permissions:
       contents: read
       packages: write
@@ -100,7 +100,7 @@ jobs:
 
   release:
     needs: [tag, chart]
-    uses: SvarogLab/.github/.github/workflows/release.yml@feat/image-and-chart-workflows
+    uses: SvarogLab/.github/.github/workflows/release.yml@v3.2
     permissions:
       contents: write
     with:
